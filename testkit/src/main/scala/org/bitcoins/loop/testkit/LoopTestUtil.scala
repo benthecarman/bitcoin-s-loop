@@ -33,9 +33,8 @@ trait LoopTestUtil extends Logging {
 
   def cannonicalDatadir = new File(s"${Properties.userHome}/.reg_loop/")
 
-  def createLoopContainer(lnd: LndRpcClient): GenericContainer = {
-    val serverInstance = lnd.instance.asInstanceOf[LndInstanceLocal]
-
+  def createLoopContainer(
+      serverInstance: LndInstanceLocal): GenericContainer = {
     val fileBind = FileSystemBind(
       serverInstance.datadir.toAbsolutePath.toString,
       "/root/.lnd",

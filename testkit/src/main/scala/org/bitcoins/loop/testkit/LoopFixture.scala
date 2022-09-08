@@ -25,7 +25,8 @@ trait LoopFixture
           bitcoind <- cachedBitcoindWithFundsF
           _ = logger.debug("creating lnds")
           (serverLnd, loopLnd) <- LndRpcTestUtil.createNodePair(bitcoind)
-          container = createLoopContainer(serverLnd)
+          serverInstance = serverLnd.instance.asInstanceOf[LndInstanceLocal]
+          container = createLoopContainer(serverInstance)
           // wait for loop server to start up
           _ <- TestAsyncUtil.nonBlockingSleep(30.seconds)
           host = container.host

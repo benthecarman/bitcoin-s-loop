@@ -6,7 +6,7 @@ import grizzled.slf4j.Logging
 import io.grpc.{CallCredentials, Metadata}
 import looprpc._
 import org.bitcoins.commons.util.NativeProcessFactory
-import org.bitcoins.core.util.StartStopAsync
+import org.bitcoins.core.util.{FutureUtil, StartStopAsync}
 import org.bitcoins.lnd.rpc.LndUtils
 
 import java.io._
@@ -126,7 +126,7 @@ class LoopRpcClient(val instance: LoopInstance, binaryOpt: Option[File] = None)(
     * @return
     *   Future Boolean representing if client has started
     */
-  def isStarted: Future[Boolean] = {
+  def isStarted: Future[Boolean] = FutureUtil.makeAsync { () =>
     val p = Promise[Boolean]()
 
     val t = Try(getLiquidityParams().onComplete {
@@ -141,7 +141,7 @@ class LoopRpcClient(val instance: LoopInstance, binaryOpt: Option[File] = None)(
     }
 
     p.future
-  }
+  }.flatten
 
   /** Returns a Future LoopRpcClient if able to shut down loop instance,
     * inherits from the StartStop trait
