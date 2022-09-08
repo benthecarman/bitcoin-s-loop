@@ -4,12 +4,10 @@ import akka.actor.ActorSystem
 import akka.grpc.{GrpcClientSettings, SSLContextUtils}
 import grizzled.slf4j.Logging
 import io.grpc.{CallCredentials, Metadata}
-import org.bitcoins.commons.util.NativeProcessFactory
-import org.bitcoins.lnd.rpc.{LndRpcClient, LndUtils}
-import org.bitcoins.lnd.rpc.config._
 import looprpc._
-import org.bitcoins.core.config.RegTest
+import org.bitcoins.commons.util.NativeProcessFactory
 import org.bitcoins.core.util.StartStopAsync
+import org.bitcoins.lnd.rpc.LndUtils
 
 import java.io._
 import java.util.concurrent.Executor
@@ -19,10 +17,8 @@ import scala.util._
 /** @param binaryOpt
   *   Path to loopd executable
   */
-class LoopRpcClient(
-    val lnd: LndRpcClient,
-    val instance: LoopInstance,
-    binaryOpt: Option[File] = None)(implicit val system: ActorSystem)
+class LoopRpcClient(val instance: LoopInstance, binaryOpt: Option[File] = None)(
+    implicit val system: ActorSystem)
     extends NativeProcessFactory
     with LndUtils
     with StartStopAsync[LoopRpcClient]
@@ -39,35 +35,7 @@ class LoopRpcClient(
   override lazy val cmd: String = {
     instance match {
       case local: LoopInstanceLocal =>
-        val dir = s"--loopdir=${local.datadir.toAbsolutePath}"
-        val listen =
-          s"--rpclisten=${instance.rpcUri.getHost}:${instance.rpcUri.getPort}"
-
-        val lndUri =
-          s"--lnd.host=${lnd.instance.rpcUri.getHost}:${lnd.instance.rpcUri.getPort}"
-
-        val (lndMacPath, lndTlsCert) = lnd.instance match {
-          case lndLocal: LndInstanceLocal =>
-            val mac = s"--lnd.macaroonpath=${lndLocal.macaroonPath}"
-            val tls = s"--lnd.tlspath=${lndLocal.certFile}"
-            (mac, tls)
-          case _: LndInstanceRemote => ("", "")
-        }
-
-        val serverHost = instance.serverURIOpt match {
-          case Some(uri) => s"--server.host=${uri.getHost}:${uri.getPort}"
-          case None      => ""
-        }
-
-        val networkStr = LoopInstanceLocal.getNetworkDirName(local.network)
-        val network = s"--network=$networkStr"
-
-        // regtest loop server does not have tls certs
-        val noTls =
-          if (local.network == RegTest) "--server.notls"
-          else ""
-
-        s"${binaryOpt.get} --debuglevel=debug $dir $network $listen $lndUri $lndMacPath $lndTlsCert $serverHost $noTls"
+        s"${binaryOpt.get} --loopdir=${local.datadir.toAbsolutePath}"
       case _: LoopInstanceRemote => ""
     }
   }
@@ -120,8 +88,12 @@ class LoopRpcClient(
       case None         => None
     }
 
+    val host =
+      if (instance.rpcUri.getHost == "0.0.0.0") "localhost"
+      else instance.rpcUri.getHost
+
     val client = GrpcClientSettings
-      .connectToServiceAt(instance.rpcUri.getHost, instance.rpcUri.getPort)
+      .connectToServiceAt(host, instance.rpcUri.getPort)
       .withCallCredentials(callCredentials)
 
     trustManagerOpt match {
@@ -214,21 +186,17 @@ object LoopRpcClient {
     * control over the RPC client.
     */
   def apply(
-      lnd: LndRpcClient,
       instance: LoopInstance,
       binary: Option[File] = None): LoopRpcClient = {
     implicit val system: ActorSystem = ActorSystem.create(ActorSystemName)
-    withActorSystem(lnd, instance, binary)
+    withActorSystem(instance, binary)
   }
 
   /** Constructs a RPC client from the given datadir, or the default datadir if
     * no directory is provided
     */
-  def withActorSystem(
-      lnd: LndRpcClient,
-      instance: LoopInstance,
-      binary: Option[File] = None)(implicit
-      system: ActorSystem): LoopRpcClient = {
-    new LoopRpcClient(lnd, instance, binary)
+  def withActorSystem(instance: LoopInstance, binary: Option[File] = None)(
+      implicit system: ActorSystem): LoopRpcClient = {
+    new LoopRpcClient(instance, binary)
   }
 }

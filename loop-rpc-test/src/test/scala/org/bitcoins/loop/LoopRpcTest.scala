@@ -1,5 +1,7 @@
 package org.bitcoins.loop
 
+import org.bitcoins.loop.testkit.LoopFixture
+
 class LoopRpcTest extends LoopFixture {
 
   it must "get swap info" in { params =>

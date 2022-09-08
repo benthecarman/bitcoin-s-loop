@@ -1,5 +1,7 @@
 package org.bitcoins.loop
 
+import akka.actor.ActorSystem
+import org.bitcoins.core.api.commons.InstanceFactoryLocal
 import org.bitcoins.core.config._
 import scodec.bits._
 
@@ -11,7 +13,6 @@ import scala.util.Properties
 sealed trait LoopInstance {
   def rpcUri: URI
   def macaroon: String
-  def serverURIOpt: Option[URI]
   def certFileOpt: Option[File]
   def certificateOpt: Option[String]
 }
@@ -19,8 +20,7 @@ sealed trait LoopInstance {
 case class LoopInstanceLocal(
     datadir: Path,
     network: BitcoinNetwork,
-    rpcUri: URI,
-    serverURIOpt: Option[URI] = None)
+    rpcUri: URI)
     extends LoopInstance {
 
   override val certificateOpt: Option[String] = None
@@ -51,26 +51,45 @@ case class LoopInstanceLocal(
       .toFile
 }
 
-object LoopInstanceLocal {
+object LoopInstanceLocal
+    extends InstanceFactoryLocal[LoopInstanceLocal, ActorSystem] {
 
-  val DEFAULT_DATADIR: Path = Paths.get(Properties.userHome, ".loop")
+  override val DEFAULT_DATADIR: Path = Paths.get(Properties.userHome, ".loop")
+
+  override val DEFAULT_CONF_FILE: Path = DEFAULT_DATADIR.resolve("loopd.conf")
 
   private[loop] def getNetworkDirName(network: BitcoinNetwork): String = {
     network match {
-      case MainNet  => "mainnet"
-      case TestNet3 => "testnet"
-      case RegTest  => "regtest"
-      case SigNet   => "signet"
+      case _: MainNet  => "mainnet"
+      case _: TestNet3 => "testnet"
+      case _: RegTest  => "regtest"
+      case _: SigNet   => "signet"
     }
   }
 
-  def fromDataDir(
-      dir: File = DEFAULT_DATADIR.toFile,
-      network: BitcoinNetwork): LoopInstanceLocal = {
+  override def fromConfigFile(file: File = DEFAULT_CONF_FILE.toFile)(implicit
+      system: ActorSystem): LoopInstanceLocal = {
+    require(file.exists, s"${file.getPath} does not exist!")
+    require(file.isFile, s"${file.getPath} is not a file!")
+
+    val config = LoopConfig(file, file.getParentFile)
+
+    fromConfig(config)
+  }
+
+  override def fromDataDir(dir: File = DEFAULT_DATADIR.toFile)(implicit
+      system: ActorSystem): LoopInstanceLocal = {
     require(dir.exists, s"${dir.getPath} does not exist!")
     require(dir.isDirectory, s"${dir.getPath} is not a directory!")
 
-    LoopInstanceLocal(dir.toPath, network, new URI("tcp://localhost:11010"))
+    val confFile = dir.toPath.resolve("loopd.conf").toFile
+    val config = LoopConfig(confFile, dir)
+
+    fromConfig(config)
+  }
+
+  def fromConfig(config: LoopConfig): LoopInstanceLocal = {
+    config.loopInstance
   }
 }
 
