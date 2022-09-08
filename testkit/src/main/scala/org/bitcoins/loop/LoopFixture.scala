@@ -64,18 +64,13 @@ trait LoopFixture extends BitcoinSFixture with CachedBitcoindV23 {
       () => {
         for {
           bitcoind <- cachedBitcoindWithFundsF
-          _ = println("creating lnds")
           _ = logger.debug("creating lnds")
           (serverLnd, loopLnd) <- LndRpcTestUtil.createNodePair(bitcoind)
-          _ = println("creating container")
           container = createLoopContainer(serverLnd)
           port = container.mappedPort(11009)
           serverUri = Some(new URI(s"tcp://127.0.0.1:$port"))
-          _ = println("creating loop client")
 
           loopPort = randomPort()
-          _ = println(s"loopPort: $loopPort")
-          _ = println(s"serverUri: $serverUri")
           instance =
             LoopInstanceLocal(datadir = randomLoopDatadir().toPath,
                               network = RegTest,

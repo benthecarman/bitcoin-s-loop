@@ -36,37 +36,40 @@ class LoopRpcClient(
   }
 
   /** The command to start the daemon on the underlying OS */
-  override def cmd: String = instance match {
-    case local: LoopInstanceLocal =>
-      val dir = s"--loopdir=${local.datadir.toAbsolutePath}"
-      val listen =
-        s"--rpclisten=${instance.rpcUri.getHost}${instance.rpcUri.getPort}"
+  override lazy val cmd: String = {
+    instance match {
+      case local: LoopInstanceLocal =>
+        val dir = s"--loopdir=${local.datadir.toAbsolutePath}"
+        val listen =
+          s"--rpclisten=${instance.rpcUri.getHost}:${instance.rpcUri.getPort}"
 
-      val lndUri =
-        s"--lnd.host=${lnd.instance.rpcUri.getHost}:${lnd.instance.rpcUri.getPort}"
+        val lndUri =
+          s"--lnd.host=${lnd.instance.rpcUri.getHost}:${lnd.instance.rpcUri.getPort}"
 
-      val (lndMacPath, lndTlsCert) = lnd.instance match {
-        case lndLocal: LndInstanceLocal =>
-          val mac = s"--lnd.macaroonpath=${lndLocal.macaroonPath}"
-          val tls = s"--lnd.tlspath=${lndLocal.certFile}"
-          (mac, tls)
-        case _: LndInstanceRemote => ("", "")
-      }
+        val (lndMacPath, lndTlsCert) = lnd.instance match {
+          case lndLocal: LndInstanceLocal =>
+            val mac = s"--lnd.macaroonpath=${lndLocal.macaroonPath}"
+            val tls = s"--lnd.tlspath=${lndLocal.certFile}"
+            (mac, tls)
+          case _: LndInstanceRemote => ("", "")
+        }
 
-      val serverHost = instance.serverURIOpt match {
-        case Some(uri) => s"--server.host=${uri.getHost}:${uri.getPort}"
-        case None      => ""
-      }
+        val serverHost = instance.serverURIOpt match {
+          case Some(uri) => s"--server.host=${uri.getHost}:${uri.getPort}"
+          case None      => ""
+        }
 
-      val networkStr = LoopInstanceLocal.getNetworkDirName(local.network)
-      val network = s"--network=$networkStr"
+        val networkStr = LoopInstanceLocal.getNetworkDirName(local.network)
+        val network = s"--network=$networkStr"
 
-      val noTls =
-        if (local.network == RegTest) "--server.notls"
-        else ""
+        // regtest loop server does not have tls certs
+        val noTls =
+          if (local.network == RegTest) "--server.notls"
+          else ""
 
-      s"${binaryOpt.get} --debuglevel=debug $dir $network $listen $lndUri $lndMacPath $lndTlsCert $serverHost $noTls"
-    case _: LoopInstanceRemote => ""
+        s"${binaryOpt.get} --debuglevel=debug $dir $network $listen $lndUri $lndMacPath $lndTlsCert $serverHost $noTls"
+      case _: LoopInstanceRemote => ""
+    }
   }
 
   implicit val executionContext: ExecutionContext = system.dispatcher
@@ -128,8 +131,6 @@ class LoopRpcClient(
   }
 
   lazy val swapClient: SwapClientClient = {
-    println(instance.macaroon)
-    println(instance.certFileOpt)
     SwapClientClient(clientSettings)
   }
   lazy val swapServer: SwapServerClient = SwapServerClient(clientSettings)
@@ -158,10 +159,8 @@ class LoopRpcClient(
 
     val t = Try(getLiquidityParams().onComplete {
       case Success(_) =>
-        println("success")
         p.success(true)
       case Failure(_) =>
-        println("failure")
         p.success(false)
     })
 
